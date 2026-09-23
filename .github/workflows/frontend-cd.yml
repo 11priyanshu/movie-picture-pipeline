@@ -78,6 +78,17 @@ jobs:
         run: |
           echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
 
+      - name: Get Backend API URL
+        run: |
+          aws eks update-kubeconfig \
+            --region us-east-1 \
+            --name cluster
+
+          BACKEND_HOST=$(kubectl get service backend \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+          echo "BACKEND_URL=http://${BACKEND_HOST}" >> "$GITHUB_ENV"
+
       - name: Build and Push Docker Image
         working-directory: starter/frontend
         env:
@@ -87,7 +98,9 @@ jobs:
           ECR_REGISTRY=${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
           IMAGE_URI=${ECR_REGISTRY}/frontend:${IMAGE_TAG}
 
-          docker build --tag "${IMAGE_URI}" .
+          docker build \
+            --build-arg REACT_APP_MOVIE_API_URL="${BACKEND_URL}" \
+            --tag "${IMAGE_URI}" .
           docker push "${IMAGE_URI}"
 
   deploy:
